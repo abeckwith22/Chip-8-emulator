@@ -1,0 +1,8 @@
+# directories
+game/
+build/
+.vscode/
+
+# files
+picture.ch8
+TODO.md
