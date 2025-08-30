@@ -6,6 +6,7 @@
 // to which I have shamelessly stolen code from for educative purposes.
 // ========================
 #include "Chip8.h"
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -13,14 +14,19 @@
 // Initialize
 // Before running the first emulation cycle, you'll you need to prepare the
 // systems state. Clearing memory resetting registers to zero.
-void Chip8::initialize(unsigned char buffer[], int bufferSize) {
+void Chip8::initialize() {
     prog_counter = 0x200; // Program counter starts at 0x200
     opcode = 0;           // Reset current opcode
     index_register = 0;   // Reset index register
     sp = 0;               // Reset stack pointer
+    file_size = 0;        // File size resets to load next game
+    gfx_clear();          // clear graphics before loading next game
 
     // Clear display
     // Clear stack
+    for(int i = 0; i < 16; i++) {
+        stack[i] = 0;
+    }
     // Clear registers
     // Clear memory
 
@@ -32,31 +38,34 @@ void Chip8::initialize(unsigned char buffer[], int bufferSize) {
         memory[i] = chip8_fontset[i];
     }
     // Reset timers
+    delay_timer = 60;
+    sound_timer = 60;
 
     // load program into memory with fopen in binary mode, start filling memory
     // addresses at location 0x200 == 512
-    for (int i = 0; i < bufferSize; ++i)
-        memory[i + 0x200] = buffer[i];
+    // for (int i = 0; i < bufferSize; ++i)
+    //     memory[i + 0x200] = buffer[i];
 }
 
-void Chip8::read_binary_opcodes(int size) {
-    // Save opcode
-    unsigned short temp_opcode = opcode;
-    // Save prog_counter
-    unsigned short temp_pc = prog_counter;
-    for (int i = 512; i < size + 512; i++) {
-        if (i != 0 && i % 10 == 0) {
-            printf("\n");
-        }
-        opcode = memory[prog_counter] << 8 | memory[prog_counter + 1];
-        prog_counter += 2;
-        printf("0x%4X | ", opcode);
+// Loads game into memory, modifies file_size to games size for debugging
+// purposes (i.e. reading opcodes)
+void Chip8::load_game(const char *executable_path) {
+    FILE *fptr;
+    if (!(fptr = fopen(executable_path, "rb"))) {
+        std::cerr << "ERROR: Failed to open file. Maybe check your executable "
+                     "path...?";
+        return;
     }
-    printf("\n");
+    // read character into memory; limiting steps to 4096 as safeguard
+    int c;
+    int i;
+    for (i = 0; (c = fgetc(fptr)) != EOF && i < 4096; i++) {
+        memory[i + 0x200] = c;
+    }
+    fclose(fptr);
 
-    // set opcode and pc back to original values
-    opcode = temp_opcode;
-    prog_counter = temp_pc;
+    // Set file size to i
+    file_size = i;
 }
 
 // TODO: Emulate a timer
@@ -70,20 +79,24 @@ void Chip8::emulate_cycle() {
     // we need to fetch the current one at prog_counter and bitshift them 8 bits
     // over and perform an OR on the next 8 bits in memory.
     opcode = memory[prog_counter] << 8 | memory[prog_counter + 1];
+    printf("Executing opcode [0x0000] -> %4X\n", opcode);
+
     // opcode & 0xF000 performs an AND operation which masks the opcode to just
     // displaying the first bit and from there we can write a switch statement
     // for each opcode.
     switch (opcode & 0xF000) {
-    case 0x0000: // 0x00E0: clears the screen
-        // execute opcode
+    case 0x0000:
         switch (opcode & 0x000F) {
+        case 0x0000: // 0x00E0: clears the screen
+            gfx_clear();
+            draw_flag = true;
+            prog_counter += 2;
             break;
         case 0x000E: // 0x00EE: Returns from subroutine
             prog_counter = stack[sp];
-            if (!(sp <= 0))
-                --sp;
-            else
-                sp = 0;
+            printf("%d\n", prog_counter);
+            --sp;
+            prog_counter += 2;
             break;
         default:
             printf("Unknown opcode [0x0000]: 0x%X\n", opcode);
@@ -131,7 +144,7 @@ void Chip8::emulate_cycle() {
         prog_counter += 2;
         break;
     case 0x7000: // 7XNN: Adds NN to VX (carry flag is not changed)
-        V[(opcode & 0x0F00) >> 12] = opcode & 0x00FF;
+        V[(opcode & 0x0F00) >> 8] += opcode & 0x00FF;
         prog_counter += 2;
         break;
     case 0x8000: // 0x8XY0-0x8XYE
@@ -251,13 +264,13 @@ void Chip8::emulate_cycle() {
     case 0xC000: {
         // 0xCXNN: Sets VX to the result of a bitwise AND operation on
         // a random number (0-255) to NN.
-        V[(opcode & 0x0F00) >> 8] =
-            (rand() % 255) & (opcode & 0x00FF); // generates random number
+        // V[(opcode & 0x0F00) >> 8] =
+        //     (rand() % 0xFF) & (opcode & 0x00FF); // generates random number
+        V[(opcode & 0x0F00) >> 8] = rand() & (opcode & 0x00FF); // generates random number
         prog_counter += 2;
     } break;
     case 0xD000: // 0xDXYN: Draws a sprite at coordinate (VX, VY)
     {
-
         unsigned short x = V[(opcode & 0x0F00) >> 8];
         unsigned short y = V[(opcode & 0x00F0) >> 4];
         unsigned short height = opcode & 0x000F;
@@ -269,12 +282,6 @@ void Chip8::emulate_cycle() {
             for (int x_line = 0; x_line < 8; x_line++) {
                 //?  What is this doing?
                 if ((pixel & (0x80 >> x_line)) != 0) {
-                    //? I understand this is collision detection, if gfx at this
-                    // address ? is set to on (1) then we should set the carry
-                    // flag to 1. ? I believe this is simply getting the address
-                    // the way ? you'd do it in a 1-dimensional array. If given
-                    // i and j, ? array[i * WIDTH + j]. 64 is the width of the
-                    // gfx buffer.
                     if (gfx[(x + x_line + ((y + y_line) * 64))] == 1)
                         V[0xF] = 1;
                     gfx[x + x_line + ((y + y_line) * 64)] ^= 1;
@@ -289,8 +296,10 @@ void Chip8::emulate_cycle() {
                  // figure out how to get graphics set up.
         switch (opcode & 0x00FF) {
         case 0x009E:
+            prog_counter += 2;
             break;
         case 0x00A1:
+            prog_counter += 2;
             break;
         default:
             printf("Unknown opcode [0x0000]: 0x%X\n", opcode);
@@ -304,6 +313,7 @@ void Chip8::emulate_cycle() {
             prog_counter += 2;
             break;
         case 0x000A: // 0xFX0A: Sets VX to the value of the delay timer
+            prog_counter += 2;
             break;
         case 0x0015: // 0xFX15: Sets the delay timer to vx.
             delay_timer = V[(opcode & 0x0F00) >> 8];
@@ -319,7 +329,8 @@ void Chip8::emulate_cycle() {
             break;
         case 0x0029: // 0xFX29: Sets I to the location of the sprite for the
                      // character in VX
-            // I = sprite_addr[Vx];
+            index_register = V[(opcode & 0x0F00) >> 8];
+            prog_counter += 2;
             break;
         case 0x0033: // 0xFX33: Stores the binary-coded decimal representation
                      // of VX
@@ -364,6 +375,40 @@ void Chip8::emulate_cycle() {
     }
 }
 
+void Chip8::gfx_clear() {
+    // Clears all values in GFX to 0
+    for (int i = 0; i < 64 * 32; i++)
+        gfx[i] = 0;
+}
+
+void Chip8::gfx_draw_all() {
+    for (int i = 0; i < 64 * 32; i++)
+        gfx[i] = 1;
+}
+
 unsigned char *Chip8::get_gfx() { return gfx; }
 
 bool Chip8::get_draw_flag() { return draw_flag; }
+
+void Chip8::set_draw_flag(bool boolean) { draw_flag = boolean; }
+
+void Chip8::read_binary_opcodes() {
+    std::cout << "== READING OPCODES ==" << std::endl;
+    // Save opcode
+    unsigned short temp_opcode = opcode;
+    // Save prog_counter
+    unsigned short temp_pc = prog_counter;
+    for (int i = 0; i < file_size; i++) {
+        if (i % 10 == 0 && i != 0) // formatting
+            printf("\n");
+        opcode = memory[prog_counter] << 8 | memory[prog_counter + 1];
+        prog_counter += 2;
+        printf("0x%4X | ", opcode);
+    }
+    printf("\n");
+
+    // set opcode and pc back to original values
+    opcode = temp_opcode;
+    prog_counter = temp_pc;
+    std::cout << "== OPCODES END ==" << std::endl;
+}

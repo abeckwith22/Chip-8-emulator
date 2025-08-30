@@ -42,6 +42,8 @@ private:
     // updates the screen.
     bool draw_flag = false;
 
+    int file_size = 0;
+
     const unsigned char chip8_fontset[80] = {
         0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
         0x20, 0x60, 0x20, 0x20, 0x70, // 1
@@ -62,17 +64,26 @@ private:
     };
 
 public:
-    // Loads game into memory, points prog_counter to start of code
-    void initialize(unsigned char b[], int b_size);
+    void initialize();
+    // Read game from filesystem and load into memory array
+    void load_game(const char* exec_path);
+
     void emulate_cycle();
+
+    // Bitmasks values in gfx to &= 0x00, sets `draw_flag` to true.
+    void gfx_clear();
+
+    void gfx_draw_all();
 
     // Returns gfx array to help update SDL window.
     unsigned char *get_gfx();
 
 	bool get_draw_flag();
 
+    void set_draw_flag(bool boolean);
+
     // Helpful for debugging
-    void read_binary_opcodes(int b_size);
+    void read_binary_opcodes();
 };
 
 #endif

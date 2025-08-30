@@ -6,3 +6,5 @@ build/
 # files
 picture.ch8
 TODO.md
+*.ch8
+debug.txt

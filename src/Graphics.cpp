@@ -5,6 +5,7 @@
 Chip8Window::Chip8Window() {
     // anything to do with the display will be scaled for properly viewing.
     // logically shouldn't affect anything else.
+    srand(time(nullptr));
 
     pixels = new Uint32[width * height];
     memset(pixels, 0, width * height);
@@ -33,7 +34,7 @@ Chip8Window::Chip8Window() {
                           //! outputted properly.
 
             SDL_UpdateTexture(texture, NULL, pixels, width * sizeof(Uint32));
-            SDL_Rect dest_rect = {0, 0, width * scale, height * scale};
+            dest_rect = {0, 0, width * scale, height * scale};
 
             // == update texture ==
             SDL_RenderClear(renderer);
@@ -52,6 +53,7 @@ Chip8Window::~Chip8Window() {
     SDL_Quit();
 }
 
+// creates a simple chessboard pattern for window (debugging)
 void Chip8Window::set_pixels() {
     bool color = false;
     for (int i = 0; i < width * height; i++) {
@@ -69,8 +71,22 @@ void Chip8Window::handle_input() {
     }
 }
 
-void Chip8Window::update_screen() {
-    // Get window surface
+void Chip8Window::update_screen(unsigned char *gfx) {
+    // update pixels from gfx
+    for (int i = 0; i < width * height; i++) {
+        pixels[i] = gfx[i] == 1 ? color_on : color_off;
+    }
+
+    // update texture
+    //* NOTE: instead of copying the entire new array from chip-8 gfx into
+    //* pixels, could instead just update the texture with pointer to gfx
+    // SDL_UpdateTexture(texture, NULL, pixels, width * sizeof(Uint32));
+    SDL_UpdateTexture(texture, NULL, pixels, width * sizeof(Uint32));
+
+    // clear previous renderer, copy new one from texture, present renderer
+    SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, texture, NULL, &dest_rect);
+    SDL_RenderPresent(renderer);
 }
 
 bool Chip8Window::is_running() { return running; }

@@ -1,63 +1,49 @@
 #include "Chip8.h"
 #include "Graphics.h"
 #include <GL/glut.h>
+#include <chrono>
 #include <iostream>
+#include <thread>
 
 Chip8 chip8;
 
-#define MAXSIZE 4096
-
-// Opens ch8 file in read-only binary mode and writes to char buffer. Returns
-// executable size.
-int write_into_buffer(const char exec_path[], unsigned char *buffer);
-
-// Displays memory opcodes to terminal
-void read_buffer(unsigned char *buffer, int buffer_size);
+void print_gfx(const unsigned char *array);
 
 void run_sdl2_window() {
+    using namespace std::this_thread;
+    using namespace std::chrono;
+    int frame = 0;
+
     Chip8Window *screen = new Chip8Window();
+    chip8.initialize();
+    chip8.load_game("picture.ch8");
     while (screen->is_running()) {
         screen->handle_input();
-        screen->update_screen();
+        chip8.emulate_cycle();
+        printf("======================\n", frame);
+        printf("Frame     -> %d\n", frame);
+        if (chip8.get_draw_flag() == true) {
+            printf("      ==> Proceeding to draw screen \n");
+            screen->update_screen(chip8.get_gfx());
+            chip8.set_draw_flag(false); // draw_flag set back to false
+            printf("======================\n", frame);
+        }
+        frame++;
     }
     delete screen;
 }
 
-void run_chip8_emulator() {
-    unsigned char buffer[MAXSIZE];
-    int size = write_into_buffer("picture.ch8", buffer);
-    chip8.initialize(buffer, size);
-    chip8.read_binary_opcodes(size);
-    for(int i = 0; i < size; i++) {
-        chip8.emulate_cycle();
+void print_gfx(const unsigned char *array) {
+    for (int i = 0; i < 64 * 32; i++) {
+        if (i % 64 == 0 && i != 0) {
+            printf("\n");
+        }
+        printf("%X", array[i]);
     }
 }
 
 int main(int argc, char **argv) {
+    // run_chip8_emulator();
     run_sdl2_window();
     return 0;
-}
-
-int write_into_buffer(const char exec_path[], unsigned char *buffer) {
-    FILE *fptr;
-    if (!(fptr = fopen(exec_path, "rb"))) {
-        std::cerr << "ERROR: Failed to open file. Maybe check your executable "
-                     "path...?";
-        return -1;
-    }
-    int c, i;
-    for (i = 0; (c = std::fgetc(fptr)) != EOF; i++)
-        buffer[i] = c;
-
-    fclose(fptr);
-    return i;
-}
-
-void read_buffer(unsigned char *buffer, int buffer_size) {
-    for (int i = 0; i < buffer_size; i++) {
-        if (i % 10 == 0 && i != 0) // formatting
-            printf("\n");
-        printf("0x%2X ", buffer[i]);
-    }
-    printf("\n");
 }

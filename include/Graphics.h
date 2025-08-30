@@ -9,10 +9,13 @@ private:
     SDL_Surface *surface = nullptr;
     SDL_Renderer *renderer = nullptr;
     SDL_Texture *texture = nullptr;
+    SDL_Rect dest_rect;
     SDL_Event event;
     Uint32 *pixels;
-    Uint32 color_on   = 0xc18652;
-    Uint32 color_off  = 0xd7c2b0;
+    // Uint32 color_on   = 0xc18652;
+    // Uint32 color_off  = 0xd7c2b0;
+    Uint32 color_on   = 0xFFFFFF;
+    Uint32 color_off  = 0x000000;
     bool running = true;
     int width   = 64;
     int height  = 32;
@@ -51,7 +54,7 @@ public:
      */
     void handle_input();
 
-    void update_screen();
+    void update_screen(unsigned char *gfx);
 
     void set_pixels();
 
