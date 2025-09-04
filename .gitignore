@@ -1,10 +1,9 @@
 # directories
-game/
+Misc/
 build/
 .vscode/
 
 # files
-picture.ch8
 TODO.md
 *.ch8
-debug.txt
+*.txt

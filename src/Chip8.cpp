@@ -1,10 +1,10 @@
-// ========================
+// =====================================================================================
 // Chip-8 Emulator
 // Program Author: abeckwith22
 // Credits go to: Laurence Muller and their article at
 // https://multigesture.net/articles/how-to-write-an-emulator-chip-8-interpreter/
 // to which I have shamelessly stolen code from for educative purposes.
-// ========================
+// =====================================================================================
 #include "Chip8.h"
 #include <iostream>
 #include <stdio.h>
@@ -20,15 +20,21 @@ void Chip8::initialize() {
     index_register = 0;   // Reset index register
     sp = 0;               // Reset stack pointer
     file_size = 0;        // File size resets to load next game
-    gfx_clear();          // clear graphics before loading next game
-
     // Clear display
+    gfx_clear(); // clear graphics before loading next game
+
     // Clear stack
-    for(int i = 0; i < 16; i++) {
+    for (int i = 0; i < 0xF; i++)
         stack[i] = 0;
-    }
     // Clear registers
+    for (int i = 0; i < 0xF; i++)
+        V[i] = 0;
     // Clear memory
+    for (int i = 0; i < 0xFFF; i++)
+        memory[i] = 0;
+    // reset keys (keys are set to 'unpressed')
+    for (int i = 0; i < 0xF; i++)
+        key[i] = 0;
 
     // Set seed
     std::srand(time(NULL));
@@ -42,9 +48,6 @@ void Chip8::initialize() {
     sound_timer = 60;
 
     // load program into memory with fopen in binary mode, start filling memory
-    // addresses at location 0x200 == 512
-    // for (int i = 0; i < bufferSize; ++i)
-    //     memory[i + 0x200] = buffer[i];
 }
 
 // Loads game into memory, modifies file_size to games size for debugging
@@ -93,13 +96,21 @@ void Chip8::emulate_cycle() {
             prog_counter += 2;
             break;
         case 0x000E: // 0x00EE: Returns from subroutine
+            printf("== RETURNING FROM SUBROUTINE ==\n");
+            // == Pop from stack
             prog_counter = stack[sp];
-            printf("%d\n", prog_counter);
-            --sp;
+            stack[sp] = 0; // clears the value from the stack
+            // logic for moving sp down
+            if (stack_current_size > 1)
+                sp--;
+            else // No entries in stack
+                sp = 0;
+            stack_current_size--;
             prog_counter += 2;
+            read_stack(); //! Debugging
             break;
         default:
-            printf("Unknown opcode [0x0000]: 0x%X\n", opcode);
+            printf("Unknown opcode [0x0000]: 0x%4X\n", opcode);
             break;
         }
         break;
@@ -107,9 +118,13 @@ void Chip8::emulate_cycle() {
         prog_counter = opcode & 0x0FFF;
         break;
     case 0x2000: // 0x2NNN: Calls subroutine at address NNN
+        printf("== CALLING SUBROUTINE ==\n");
+        if (stack_current_size > 0)
+            sp++;
+        stack_current_size++;
         stack[sp] = prog_counter;
-        ++sp;
         prog_counter = opcode & 0x0FFF;
+        read_stack(); //! Debugging
         break;
     case 0x3000: // 3XNN: Skips the next instruction if VX == NN (usually the
                  // next instruction is a jump to skip a code block).
@@ -234,8 +249,8 @@ void Chip8::emulate_cycle() {
             //* From wikipedia: 8XYE: Shifts vx to the left by 1, then sets
             //* VF to 1 if the most significant bit of VX prior to that
             //* shift was set, or to 0 if it was unset.
-            // Checks if value at register is greater than or equal to 128
-            // which in binary sets the most significant bit to 1.
+            //* Checks if value at register is greater than or equal to 128
+            //* which in binary sets the most significant bit to 1.
             if (V[(opcode & 0x0F00) >> 8] >= 0x80)
                 V[0xF] = 1;
             else
@@ -244,7 +259,7 @@ void Chip8::emulate_cycle() {
             prog_counter += 2;
             break;
         default:
-            printf("Unknown opcode [0x0000]: 0x%X\n", opcode);
+            printf("Unknown opcode [0x0000]: 0x%4X\n", opcode);
             break;
         }
         break;
@@ -266,7 +281,8 @@ void Chip8::emulate_cycle() {
         // a random number (0-255) to NN.
         // V[(opcode & 0x0F00) >> 8] =
         //     (rand() % 0xFF) & (opcode & 0x00FF); // generates random number
-        V[(opcode & 0x0F00) >> 8] = rand() & (opcode & 0x00FF); // generates random number
+        V[(opcode & 0x0F00) >> 8] =
+            rand() & (opcode & 0x00FF); // generates random number
         prog_counter += 2;
     } break;
     case 0xD000: // 0xDXYN: Draws a sprite at coordinate (VX, VY)
@@ -296,13 +312,21 @@ void Chip8::emulate_cycle() {
                  // figure out how to get graphics set up.
         switch (opcode & 0x00FF) {
         case 0x009E:
-            prog_counter += 2;
+            //! Need to find a way to implement key() properly
+            if (key[V[(opcode & 0x0F00) >> 8]] == 1)
+                prog_counter += 4;
+            else
+                prog_counter += 2;
             break;
         case 0x00A1:
-            prog_counter += 2;
+            //! Need to find a way to implement key() properly
+            if (key[V[(opcode & 0x0F00) >> 8]] != 1)
+                prog_counter += 4;
+            else
+                prog_counter += 2;
             break;
         default:
-            printf("Unknown opcode [0x0000]: 0x%X\n", opcode);
+            printf("Unknown opcode [0x0000]: 0x%4X\n", opcode);
             break;
         }
         break;
@@ -312,7 +336,12 @@ void Chip8::emulate_cycle() {
             V[(opcode & 0x0F00) >> 8] = delay_timer;
             prog_counter += 2;
             break;
-        case 0x000A: // 0xFX0A: Sets VX to the value of the delay timer
+        case 0x000A: // 0xFX0A
+            //* From Wikipedia: A key press is awaited, and then stored in VX
+            //* (blocking operation,
+            //* all instruction halted until next key event, delay and sound
+            //* timers should continue
+            //* processing).
             prog_counter += 2;
             break;
         case 0x0015: // 0xFX15: Sets the delay timer to vx.
@@ -355,13 +384,13 @@ void Chip8::emulate_cycle() {
             prog_counter += 2;
             break;
         default:
-            printf("Unknown opcode [0x0000]: 0x%X\n", opcode);
+            printf("Unknown opcode [0x0000]: 0x%4X\n", opcode);
             break;
         }
         break;
 
     default:
-        printf("Unknown opcode [0x0000]: 0x%X\n", opcode);
+        printf("Unknown opcode [0x0000]: 0x%4X\n", opcode);
         break;
     }
     // Update timers
@@ -384,6 +413,11 @@ void Chip8::gfx_clear() {
 void Chip8::gfx_draw_all() {
     for (int i = 0; i < 64 * 32; i++)
         gfx[i] = 1;
+}
+
+void Chip8::read_stack() {
+    for (int i = 0; i < 16; i++)
+        printf("Memory @ %2d [0x0000] ==> %4X\n", i, stack[i]);
 }
 
 unsigned char *Chip8::get_gfx() { return gfx; }

@@ -19,7 +19,8 @@ private:
     // prog_counter (pc) moves to next opcodes in memory.
     unsigned short prog_counter;
 
-    // Graphics buffer. Chip-8 supports a height of 64 pixels and a width of 32 pixels.
+    // Graphics buffer. Chip-8 supports a height of 64 pixels and a width of 32
+    // pixels.
     unsigned char gfx[64 * 32];
 
     unsigned char sound_timer;
@@ -32,13 +33,35 @@ private:
     unsigned short stack[16];
     // moves through stack and increments either up or down when opcode
     // calls a subroutine.
+
+    // Current number of entries in the stack.
+    unsigned int stack_current_size = 0;
+
+    // Stack pointer, increments up and down based on calls and returns from
+    // subroutines.
     unsigned short sp;
 
-    // Lastly, the chip-8 has a HEX based keypad (0x0-0xF), you can use an array
+    // The chip-8 has a HEX based keypad (0x0-0xF), you can use an array
     // to store the current state of the key.
-    unsigned char key[16];
 
-    // when gfx is updated, draw_flag is set to true and
+    //* ====================== Key Mapping =================================
+    //* |  0: 0x00 |  1: 0x01 |  2: 0x02 |  3: 0x03 | <=> | 1 | 2 | 3 | 4 |
+    //* |  4: 0x04 |  5: 0x05 |  6: 0x06 |  7: 0x07 | <=> | Q | W | E | R |
+    //* |  8: 0x08 |  9: 0x09 | 10: 0x0a | 11: 0x0b | <=> | A | S | D | F |
+    //* | 12: 0x0c | 13: 0x0d | 14: 0x0e | 15: 0x0f | <=> | Z | X | C | V |
+    //* ====================================================================
+
+    //* Every frame that Chip8Window checks for input set value to 1 if
+    //* associated key is pressed and switch back to 0 if unpressed
+    //* Note: At initialization, all values in key should be set to 0.
+
+    //? to avoid confusion, shouldn't key be a list of booleans instead of
+    //? unsigned characters?
+    //? The values are only going to be either on (pressed) or off (unpressed).
+    bool key[16];
+    // unsigned char key[16];
+
+    // When gfx is updated, draw_flag is set to true and
     // updates the screen.
     bool draw_flag = false;
 
@@ -64,26 +87,34 @@ private:
     };
 
 public:
+    // Gets emulator read to load game.
     void initialize();
-    // Read game from filesystem and load into memory array
-    void load_game(const char* exec_path);
-
+    // Read game from filesystem and load into memory array.
+    void load_game(const char *exec_path);
     void emulate_cycle();
-
     // Bitmasks values in gfx to &= 0x00, sets `draw_flag` to true.
     void gfx_clear();
-
     void gfx_draw_all();
-
     // Returns gfx array to help update SDL window.
     unsigned char *get_gfx();
-
-	bool get_draw_flag();
-
+    // Draw flags getters/setters
+    bool get_draw_flag();
     void set_draw_flag(bool boolean);
 
-    // Helpful for debugging
+    //* Pass in array of keys from Chip8Window class and loop through the 16 keys
+    //* and switch their states depending if that key is pressed.
+    //* NOTE: Wondering if I need to work out key-mapping or if the opcode key
+    //* buffer will be enough by itself.
+
+
+    void set_key(int address) {
+        if (address > 0 && address < 16)
+            key[address] = 1;
+    }
+
+    // Debugging
     void read_binary_opcodes();
+    void read_stack();
 };
 
 #endif

@@ -65,16 +65,85 @@ void Chip8Window::set_pixels() {
 
 void Chip8Window::handle_input() {
     while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_QUIT) {
+        switch (event.type) {
+        case SDL_QUIT:
             flip_game_running();
+            break;
+        case SDL_KEYDOWN: {
+            std::cout << "Key press detected" << std::endl;
+            SDL_KeyboardEvent k = event.key;
+            printf("Scancode: 0x%02X", k.keysym.scancode);
+            printf(", (char)Scancode: %c", k.keysym.sym >= 33 && k.keysym.sym <= 126 ? (char)k.keysym.sym : '*');
+            printf(", Name: %s\n", SDL_GetKeyName(k.keysym.sym));
+            // Sorry for the implementation, just want to get this working properly
+            switch(k.keysym.sym) {
+                case '1':
+                    break;
+                case '2':
+                    break;
+                case '3':
+                    break;
+                case '4': 
+                    break;
+                case 'q': 
+                    break;
+                case 'w': 
+                    break;
+                case 'e': 
+                    break;
+                case 'r': 
+                    break;
+                case 'a': 
+                    break;
+                case 's': 
+                    break;
+                case 'd': 
+                    break;
+                case 'f': 
+                    break;
+                case 'z': 
+                    break;
+                case 'x': 
+                    break;
+                case 'c': 
+                    break;
+                case 'v': 
+                    break;
+                default:
+                    printf("Key unrecognized: %c\n", k.keysym.sym);
+                    break;
+            }
+            break;
+        }
+        case SDL_KEYUP:
+            std::cout << "Key release detected" << std::endl;
+            break;
         }
     }
 }
 
-void Chip8Window::update_screen(unsigned char *gfx) {
+void Chip8Window::update_screen_with_buffer(unsigned char *gfx) {
     // update pixels from gfx
     for (int i = 0; i < width * height; i++) {
         pixels[i] = gfx[i] == 1 ? color_on : color_off;
+    }
+
+    // update texture
+    //* NOTE: instead of copying the entire new array from chip-8 gfx into
+    //* pixels, could instead just update the texture with pointer to gfx
+    // SDL_UpdateTexture(texture, NULL, pixels, width * sizeof(Uint32));
+    SDL_UpdateTexture(texture, NULL, pixels, width * sizeof(Uint32));
+
+    // clear previous renderer, copy new one from texture, present renderer
+    SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, texture, NULL, &dest_rect);
+    SDL_RenderPresent(renderer);
+}
+
+void Chip8Window::update_screen() {
+    // update pixels from gfx
+    for (int i = 0; i < width * height; i++) {
+        pixels[i] = i % 2 == 0 ? color_on : color_off;
     }
 
     // update texture
